@@ -12,22 +12,12 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
-from dotenv import load_dotenv
 
 BASE_URL = "https://data.austintexas.gov/resource/xwdj-i9he.json"
 BATCH_SIZE = 10000
 MAX_RETRIES = 3
 RETRY_DELAY = 2
 MAX_WORKERS = 8
-
-
-def load_api_key():
-    """Load API key from .env file (optional for public datasets)."""
-    load_dotenv()
-    api_key = os.getenv("API_KEY")
-    if not api_key:
-        print("Warning: API_KEY not found in .env file. Using public access.", file=sys.stderr)
-    return api_key
 
 
 def build_params(offset, year=None):
@@ -81,7 +71,7 @@ def get_total_count(session, year=None):
     return int(response.json()[0]["count"])
 
 
-def fetch_all_records(api_key, year=None):
+def fetch_all_records(year=None):
     """Fetch all records in parallel batches."""
     with requests.Session() as session:
         total = get_total_count(session, year)
@@ -140,14 +130,12 @@ def main():
     )
     args = parser.parse_args()
 
-    api_key = load_api_key()
-
     if args.year:
         print(f"Fetching 311 data for year {args.year}...", file=sys.stderr)
     else:
         print("Fetching all 311 data...", file=sys.stderr)
 
-    records = fetch_all_records(api_key, args.year)  # api_key unused but kept for future auth
+    records = fetch_all_records(args.year)
     counter = count_by_topic(records)
     print_results(counter)
 
