@@ -14,15 +14,30 @@ function App() {
     setData(null)
 
     try {
-      const response = await fetch(`/api/counts?year=${year}`)
+      const params = new URLSearchParams({
+        '$select': 'sr_type_desc, count(*) as count',
+        '$group': 'sr_type_desc',
+        '$order': 'count DESC',
+        '$limit': '50000',
+        '$where': `sr_created_date >= '${year}-01-01' AND sr_created_date < '${Number(year) + 1}-01-01'`,
+      })
+      const response = await fetch(
+        `https://data.austintexas.gov/resource/xwdj-i9he.json?${params}`
+      )
       if (!response.ok) {
         throw new Error(`HTTP error: ${response.status}`)
       }
-      const result = await response.json()
-      if (result.error) {
-        throw new Error(result.error)
-      }
-      setData(result)
+      const rows = await response.json()
+      const counts = rows.map((row) => ({
+        type: row.sr_type_desc || 'Unknown',
+        count: parseInt(row.count, 10),
+      }))
+      setData({
+        year: Number(year),
+        total: counts.reduce((sum, r) => sum + r.count, 0),
+        unique_types: counts.length,
+        counts,
+      })
     } catch (err) {
       setError(err.message)
     } finally {

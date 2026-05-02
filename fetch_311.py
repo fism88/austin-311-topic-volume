@@ -5,104 +5,34 @@ Supports filtering by year and processes data in chunks for large datasets.
 """
 
 import argparse
-import os
 import sys
-import time
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
 BASE_URL = "https://data.austintexas.gov/resource/xwdj-i9he.json"
-BATCH_SIZE = 10000
-MAX_RETRIES = 3
-RETRY_DELAY = 2
-MAX_WORKERS = 8
 
 
-def build_params(offset, year=None):
-    """Build query params for a batch request."""
+def fetch_counts_by_topic(year=None):
+    """Fetch pre-aggregated topic counts via a single server-side GROUP BY query."""
     params = {
-        "$select": "sr_type_desc",
-        "$limit": BATCH_SIZE,
-        "$offset": offset,
-        "$order": ":id",
+        "$select": "sr_type_desc, count(*) as count",
+        "$group": "sr_type_desc",
+        "$limit": 50000,  # well above the number of unique service types
     }
     if year:
         params["$where"] = f"sr_created_date >= '{year}-01-01' AND sr_created_date < '{year + 1}-01-01'"
-    return params
 
-
-def fetch_batch(session, offset, year=None):
-    """Fetch a batch of records from the API."""
-    params = build_params(offset, year)
-
-    for attempt in range(MAX_RETRIES):
-        try:
-            response = session.get(BASE_URL, params=params, timeout=60)
-
-            if response.status_code == 429:
-                wait_time = RETRY_DELAY * (attempt + 1)
-                print(f"Rate limited. Waiting {wait_time}s...", file=sys.stderr)
-                time.sleep(wait_time)
-                continue
-
-            response.raise_for_status()
-            return response.json()
-
-        except requests.exceptions.RequestException as e:
-            if attempt < MAX_RETRIES - 1:
-                wait_time = RETRY_DELAY * (attempt + 1)
-                print(f"Request failed: {e}. Retrying in {wait_time}s...", file=sys.stderr)
-                time.sleep(wait_time)
-            else:
-                raise
-
-    return []
-
-
-def get_total_count(session, year=None):
-    """Get total record count via $select=count(*)."""
-    params = {"$select": "count(*)", "$limit": 1}
-    if year:
-        params["$where"] = f"sr_created_date >= '{year}-01-01' AND sr_created_date < '{year + 1}-01-01'"
-    response = session.get(BASE_URL, params=params, timeout=60)
+    print("Fetching aggregated topic counts...", file=sys.stderr)
+    response = requests.get(BASE_URL, params=params, timeout=60)
     response.raise_for_status()
-    return int(response.json()[0]["count"])
+    rows = response.json()
+    print(f"Retrieved {len(rows)} unique service types.", file=sys.stderr)
 
-
-def fetch_all_records(year=None):
-    """Fetch all records in parallel batches."""
-    with requests.Session() as session:
-        total = get_total_count(session, year)
-        print(f"Total records to fetch: {total}", file=sys.stderr)
-
-        offsets = range(0, total, BATCH_SIZE)
-        all_records = []
-
-        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-            futures = {executor.submit(fetch_batch, session, offset, year): offset for offset in offsets}
-            completed = 0
-            for future in as_completed(futures):
-                batch = future.result()
-                all_records.extend(batch)
-                completed += 1
-                print(f"Fetched batch {completed}/{len(futures)} ({len(all_records)} records so far)...", file=sys.stderr)
-
-    print(f"Total records fetched: {len(all_records)}", file=sys.stderr)
-    return all_records
-
-
-def count_by_topic(records):
-    """Count records by sr_type_desc field."""
     counter = Counter()
-
-    for record in records:
-        topic = record.get("sr_type_desc", "Unknown")
-        if topic is None:
-            topic = "Unknown"
-        counter[topic] += 1
-
+    for row in rows:
+        topic = row.get("sr_type_desc") or "Unknown"
+        counter[topic] = int(row["count"])
     return counter
 
 
@@ -135,8 +65,7 @@ def main():
     else:
         print("Fetching all 311 data...", file=sys.stderr)
 
-    records = fetch_all_records(args.year)
-    counter = count_by_topic(records)
+    counter = fetch_counts_by_topic(args.year)
     print_results(counter)
 
 

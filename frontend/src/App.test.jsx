@@ -44,30 +44,27 @@ describe('App', () => {
   })
 
   it('displays results after successful fetch', async () => {
-    const mockData = {
-      year: 2024,
-      total: 100,
-      unique_types: 5,
-      counts: [
-        { type: 'Pothole', count: 50 },
-        { type: 'Graffiti', count: 30 },
-      ],
-    }
+    const mockRows = [
+      { sr_type_desc: 'Pothole', count: '50' },
+      { sr_type_desc: 'Graffiti', count: '30' },
+    ]
 
     vi.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve(mockData),
+      json: () => Promise.resolve(mockRows),
     })
 
     render(<App />)
+    const input = screen.getByLabelText('Year:')
+    fireEvent.change(input, { target: { value: '2024' } })
     fireEvent.click(screen.getByRole('button', { name: 'Fetch Data' }))
 
     await waitFor(() => {
       expect(screen.getByText('Results for 2024')).toBeInTheDocument()
     })
 
-    expect(screen.getByText('100')).toBeInTheDocument()
     expect(screen.getByText('Pothole')).toBeInTheDocument()
+    expect(screen.getByText('Graffiti')).toBeInTheDocument()
   })
 
   it('displays error message on fetch failure', async () => {
@@ -81,20 +78,6 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Error:/)).toBeInTheDocument()
-    })
-  })
-
-  it('displays error when API returns error object', async () => {
-    vi.spyOn(global, 'fetch').mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ error: 'API Error' }),
-    })
-
-    render(<App />)
-    fireEvent.click(screen.getByRole('button', { name: 'Fetch Data' }))
-
-    await waitFor(() => {
-      expect(screen.getByText('Error: API Error')).toBeInTheDocument()
     })
   })
 

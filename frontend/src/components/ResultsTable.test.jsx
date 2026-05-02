@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import ResultsTable from './ResultsTable'
 
 const mockData = {
@@ -31,8 +31,9 @@ describe('ResultsTable', () => {
   })
 
   it('displays unique types count', () => {
-    render(<ResultsTable data={mockData} />)
-    expect(screen.getByText('3')).toBeInTheDocument()
+    const { container } = render(<ResultsTable data={mockData} />)
+    const summary = container.querySelector('.summary p')
+    expect(within(summary).getByText('3')).toBeInTheDocument()
   })
 
   it('renders all service types in table', () => {
@@ -110,8 +111,9 @@ describe('ResultsTable', () => {
 
   it('handles empty counts array', () => {
     const emptyData = { ...mockData, counts: [], unique_types: 0, total: 0 }
-    render(<ResultsTable data={emptyData} />)
-    expect(screen.getByText('0')).toBeInTheDocument()
+    const { container } = render(<ResultsTable data={emptyData} />)
+    const summary = container.querySelector('.summary p')
+    expect(within(summary).getAllByText('0')).toHaveLength(2)
   })
 
   it('formats large numbers with locale string', () => {
