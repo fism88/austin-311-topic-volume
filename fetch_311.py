@@ -13,15 +13,20 @@ import requests
 BASE_URL = "https://data.austintexas.gov/resource/xwdj-i9he.json"
 
 
-def fetch_counts_by_topic(year=None):
+def fetch_counts_by_topic(year=None, zip_code=None):
     """Fetch pre-aggregated topic counts via a single server-side GROUP BY query."""
     params = {
         "$select": "sr_type_desc, count(*) as count",
         "$group": "sr_type_desc",
         "$limit": 50000,  # well above the number of unique service types
     }
+    where_parts = []
     if year:
-        params["$where"] = f"sr_created_date >= '{year}-01-01' AND sr_created_date < '{year + 1}-01-01'"
+        where_parts.append(f"sr_created_date >= '{year}-01-01' AND sr_created_date < '{year + 1}-01-01'")
+    if zip_code:
+        where_parts.append(f"sr_location_zip_code = '{zip_code}'")
+    if where_parts:
+        params["$where"] = " AND ".join(where_parts)
 
     print("Fetching aggregated topic counts...", file=sys.stderr)
     response = requests.get(BASE_URL, params=params, timeout=60)
@@ -58,14 +63,22 @@ def main():
         type=int,
         help="Filter by year (e.g., 2024)",
     )
+    parser.add_argument(
+        "--zip",
+        help="Filter by zip code (e.g., 78701)",
+    )
     args = parser.parse_args()
 
-    if args.year:
+    if args.year and args.zip:
+        print(f"Fetching 311 data for year {args.year}, zip code {args.zip}...", file=sys.stderr)
+    elif args.year:
         print(f"Fetching 311 data for year {args.year}...", file=sys.stderr)
+    elif args.zip:
+        print(f"Fetching 311 data for zip code {args.zip}...", file=sys.stderr)
     else:
         print("Fetching all 311 data...", file=sys.stderr)
 
-    counter = fetch_counts_by_topic(args.year)
+    counter = fetch_counts_by_topic(args.year, args.zip)
     print_results(counter)
 
 

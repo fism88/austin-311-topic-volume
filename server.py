@@ -19,7 +19,7 @@ MAX_RETRIES = 3
 RETRY_DELAY = 2
 
 
-def fetch_batch(offset, year=None):
+def fetch_batch(offset, year=None, zip_code=None):
     """Fetch a batch of records from the API."""
     params = {
         "$limit": BATCH_SIZE,
@@ -27,8 +27,13 @@ def fetch_batch(offset, year=None):
         "$order": ":id",
     }
 
+    where_parts = []
     if year:
-        params["$where"] = f"sr_created_date >= '{year}-01-01' AND sr_created_date < '{year + 1}-01-01'"
+        where_parts.append(f"sr_created_date >= '{year}-01-01' AND sr_created_date < '{year + 1}-01-01'")
+    if zip_code:
+        where_parts.append(f"sr_location_zip_code = '{zip_code}'")
+    if where_parts:
+        params["$where"] = " AND ".join(where_parts)
 
     for attempt in range(MAX_RETRIES):
         try:
@@ -50,12 +55,12 @@ def fetch_batch(offset, year=None):
     return []
 
 
-def fetch_all_records(year=None):
+def fetch_all_records(year=None, zip_code=None):
     """Generator that yields records in batches."""
     offset = 0
 
     while True:
-        batch = fetch_batch(offset, year)
+        batch = fetch_batch(offset, year, zip_code)
 
         if not batch:
             break
@@ -86,9 +91,10 @@ def get_counts():
     """Get service request counts, optionally filtered by year."""
     year_param = request.args.get("year")
     year = int(year_param) if year_param else None
+    zip_code = request.args.get("zip_code") or None
 
     try:
-        records = fetch_all_records(year)
+        records = fetch_all_records(year, zip_code)
         counter = count_by_topic(records)
 
         counts = [
@@ -98,6 +104,7 @@ def get_counts():
 
         return jsonify({
             "year": year,
+            "zip_code": zip_code,
             "total": sum(counter.values()),
             "unique_types": len(counter),
             "counts": counts,

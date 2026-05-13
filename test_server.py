@@ -99,6 +99,37 @@ class TestFetchBatch:
         assert "2025-01-01" in request.url
 
     @responses.activate
+    def test_fetch_batch_with_zip_code_filter(self):
+        mock_data = [{"sr_type_desc": "Pothole"}]
+        responses.add(
+            responses.GET,
+            BASE_URL,
+            json=mock_data,
+            status=200,
+        )
+
+        result = fetch_batch(offset=0, zip_code="78701")
+        assert result == mock_data
+
+        request = responses.calls[0].request
+        assert "sr_location_zip_code" in request.url
+        assert "78701" in request.url
+
+    @responses.activate
+    def test_fetch_batch_without_zip_code_omits_filter(self):
+        responses.add(
+            responses.GET,
+            BASE_URL,
+            json=[],
+            status=200,
+        )
+
+        fetch_batch(offset=0)
+
+        request = responses.calls[0].request
+        assert "sr_location_zip_code" not in request.url
+
+    @responses.activate
     def test_fetch_batch_empty_response(self):
         responses.add(
             responses.GET,
@@ -152,6 +183,44 @@ class TestCountsEndpoint:
         assert response.status_code == 200
         data = response.json
         assert data["year"] is None
+
+    @responses.activate
+    def test_counts_endpoint_with_zip_code(self, client):
+        mock_data = [
+            {"sr_type_desc": "Pothole"},
+            {"sr_type_desc": "Graffiti"},
+        ]
+        responses.add(
+            responses.GET,
+            BASE_URL,
+            json=mock_data,
+            status=200,
+        )
+
+        response = client.get("/api/counts?year=2024&zip_code=78701")
+
+        assert response.status_code == 200
+        data = response.json
+        assert data["zip_code"] == "78701"
+        assert data["year"] == 2024
+
+        request = responses.calls[0].request
+        assert "sr_location_zip_code" in request.url
+        assert "78701" in request.url
+
+    @responses.activate
+    def test_counts_endpoint_zip_code_null_when_omitted(self, client):
+        responses.add(
+            responses.GET,
+            BASE_URL,
+            json=[{"sr_type_desc": "Pothole"}],
+            status=200,
+        )
+
+        response = client.get("/api/counts?year=2024")
+
+        assert response.status_code == 200
+        assert response.json["zip_code"] is None
 
     @responses.activate
     def test_counts_endpoint_api_error(self, client):

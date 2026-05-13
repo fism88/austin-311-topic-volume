@@ -10,7 +10,7 @@ function ResultsTable({ data }) {
   return (
     <div className="results">
       <div className="summary">
-        <h2>Results for {data.year || 'All Years'}</h2>
+        <h2>Results for {data.year || 'All Years'}{data.zip_code ? ` in ${data.zip_code}` : ''}</h2>
         <p>
           <strong>{data.total.toLocaleString()}</strong> total records |{' '}
           <strong>{data.unique_types}</strong> unique service types
